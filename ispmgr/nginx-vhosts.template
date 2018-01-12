@@ -1,0 +1,144 @@
+server {
+	server_name {% $NAME %} [% $ALIASES %];
+	charset [% $CHARSET %];
+{% if $DIRINDEX != "" %}
+	index [% $DIRINDEX %];
+{% endif %}
+	set $root_path {% $VIRTUAL_DOCROOT %};
+	disable_symlinks if_not_owner from=$root_path;
+	include {% $NGINX_VHOST_INCLUDES %};
+	include {% $INCLUDE_RESOURCE_PATH %};
+{% if $LOG_ACCESS == on %}
+	access_log [% $ACCESS_LOG_PATH %];
+{% elif $NO_TRAFF_COUNT == on %}
+	access_log off;
+{% endif %}
+{% if $LOG_ERROR == on %}
+	error_log {% $ERROR_LOG_PATH %} notice;
+{% else %}
+	error_log /dev/null crit;
+{% endif %}
+{% if $SSI == on %}
+	ssi on;
+{% endif %}
+	include /etc/nginx/wordpress_cache/wordpress.conf;
+	include /etc/nginx/wordpress_cache/restrictions.conf;
+	include /etc/nginx/wordpress_cache/w3-total-cache.conf;
+{% if $REDIRECT_HTTP == on %}
+	return 301 https://$host:{% $SSL_PORT %}$request_uri;
+{% endif %}
+{% if $AUTOSUBDOMAIN != off and $AUTOSUBDOMAIN != "" %}
+{% if $AUTOSUBDOMAIN == autosubdomain_subdir %}
+	set $subdomain "";
+{% elif $AUTOSUBDOMAIN == autosubdomain_dir %}
+		set $subdomain {% $AUTOSUBDOMAIN_SUBDOMAIN_PART %};
+{% endif %}
+	if ($host ~* ^((.*).{% $NAME %})$) {
+{% if $AUTOSUBDOMAIN == autosubdomain_dir %}
+		set $subdomain $1;
+{% elif $AUTOSUBDOMAIN == autosubdomain_subdir %}
+		set $subdomain $2;
+{% endif %}
+	}
+	root $root_path/$subdomain;
+{% else %}
+	root $root_path;
+{% endif %}
+{% if $FOREGROUND == on %}
+	listen {% $NGINX_LISTEN_ON %} default_server;
+{% else %}
+	listen {% $NGINX_LISTEN_ON %};
+{% endif %}
+{% if $USER_RESOURCES %}
+	include {% $USER_NGINX_RESOURCES_PATH %};
+{% endif %}
+{% if $SRV_GZIP == on %}
+	gzip on;
+	gzip_comp_level [% $GZIP_LEVEL %];
+	gzip_disable "msie6";
+	gzip_types [% $GZIP_TYPES %];
+{% endif %}
+{% if $REDIRECT_TO_APACHE != on and $SRV_CACHE == on %}
+	expires [% $EXPIRES_VALUE %];
+{% endif %}
+	location / {
+		# W3 total cache
+		try_files /wp-content/cache/page_enhanced/${host}${cache_uri}_index.html $uri $uri/ /index.php?$args;
+		# WP Super Cache
+		# try_files /wp-content/cache/supercache/${host}/${cache_uri}/index.html $uri $uri/ /index.php?$args ;
+{% if $PHP == on %}
+		location ~ [^/]\.ph(p\d*|tml)$ {
+{% if $PHP_MODE == php_mode_fcgi_nginxfpm %}
+			try_files /does_not_exists @php;
+{% else %}
+			try_files /does_not_exists @fallback;
+{% endif %}
+		}
+{% endif %}
+
+{% if $REDIRECT_TO_APACHE == on %}
+		location ~* ^.+\.(jpg|jpeg|gif|png|svg|js|css|mp3|ogg|mpe?g|avi|zip|gz|bz2?|rar|swf)$ {
+{% if $SRV_CACHE == on %}
+			expires [% $EXPIRES_VALUE %];
+{% endif %}
+			try_files $uri $uri/ @fallback;
+		}
+		location / {
+			try_files /does_not_exists @fallback;
+		}
+{% endif %}
+	}
+{% if $ANALYZER != off and $ANALYZER != "" %}
+	location {% $WEBSTAT_LOCATION %} {
+		charset [% $WEBSTAT_ENCODING %];
+		index index.html;
+{% if $PHP == on %}
+		location ~ [^/]\.ph(p\d*|tml)$ {
+{% if $PHP_MODE == php_mode_fcgi_nginxfpm %}
+			try_files /does_not_exists @php;
+{% else %}
+			try_files /does_not_exists @fallback;
+{% endif %}
+		}
+{% endif %}
+{% if $REDIRECT_TO_APACHE == on %}
+		location ~* ^.+\.(jpg|jpeg|gif|png|svg|js|css|mp3|ogg|mpe?g|avi|zip|gz|bz2?|rar|swf)$ {
+{% if $SRV_CACHE == on %}
+			expires [% $EXPIRES_VALUE %];
+{% endif %}
+			try_files $uri $uri/ @fallback;
+		}
+		location {% $WEBSTAT_LOCATION %} {
+			try_files /does_not_exists @fallback;
+		}
+{% endif %}
+	}
+{% endif %}
+{% if $REDIRECT_TO_APACHE == on %}
+	location @fallback {
+		proxy_pass {% $BACKEND_BIND_URI %};
+		proxy_redirect {% $BACKEND_BIND_URI %} /;
+		proxy_set_header Host $host;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_set_header X-Forwarded-Port $server_port;
+{% if $NO_TRAFF_COUNT == on %}
+		access_log off;
+{% endif %}
+	}
+{% endif %}
+{% if $REDIRECT_TO_PHPFPM == on %}
+	location @php {
+		fastcgi_index index.php;
+		fastcgi_param PHP_ADMIN_VALUE "sendmail_path = /usr/sbin/sendmail -t -i -f {% $EMAIL %}";
+		fastcgi_pass {% $PHPFPM_USER_SOCKET_PATH %};
+		fastcgi_split_path_info ^((?U).+\.ph(?:p\d*|tml))(/?.+)$;
+		try_files $uri =404;
+		include fastcgi_params;
+	}
+{% endif %}
+}
+{% if $SSL == on %}
+{% import etc/templates/nginx-vhosts-ssl.template %}
+{% endif %}
+
