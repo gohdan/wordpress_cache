@@ -1,5 +1,19 @@
 server {
 	server_name {% $NAME %} [% $ALIASES %];
+	ssl on;
+	ssl_certificate [% $SSL_CRT_BUNDLE_PATH %];
+	ssl_certificate_key [% $SSL_KEY_PATH %];
+	ssl_ciphers EECDH:+AES256:-3DES:RSA+AES:!NULL:!RC4;
+	ssl_prefer_server_ciphers on;
+	ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+{% if $HSTS == on %}
+	add_header Strict-Transport-Security "max-age=31536000;";
+{% endif %}
+{% if $SSL_DHPARAM == 2048 %}
+	ssl_dhparam /etc/ssl/certs/dhparam2048.pem;
+{% elif $SSL_DHPARAM == 4096 %}
+	ssl_dhparam /etc/ssl/certs/dhparam4096.pem;
+{% endif %}
 	charset [% $CHARSET %];
 {% if $DIRINDEX != "" %}
 	index [% $DIRINDEX %];
@@ -24,9 +38,6 @@ server {
 	include /etc/nginx/wordpress_cache/wordpress.conf;
 	include /etc/nginx/wordpress_cache/restrictions.conf;
 	include /etc/nginx/wordpress_cache/w3-total-cache.conf;
-{% if $REDIRECT_HTTP == on %}
-	return 301 https://$host:{% $SSL_PORT %}$request_uri;
-{% endif %}
 {% if $AUTOSUBDOMAIN != off and $AUTOSUBDOMAIN != "" %}
 {% if $AUTOSUBDOMAIN == autosubdomain_subdir %}
 	set $subdomain "";
@@ -45,9 +56,9 @@ server {
 	root $root_path;
 {% endif %}
 {% if $FOREGROUND == on %}
-	listen {% $NGINX_LISTEN_ON %} default_server;
+	listen {% $NGINX_SSL_LISTEN_ON %} default_server;
 {% else %}
-	listen {% $NGINX_LISTEN_ON %};
+	listen {% $NGINX_SSL_LISTEN_ON %};
 {% endif %}
 {% if $USER_RESOURCES %}
 	include {% $USER_NGINX_RESOURCES_PATH %};
@@ -75,7 +86,6 @@ server {
 {% endif %}
 		}
 {% endif %}
-
 {% if $REDIRECT_TO_APACHE == on %}
 		location ~* ^.+\.(jpg|jpeg|gif|png|svg|js|css|mp3|ogg|mpe?g|avi|zip|gz|bz2?|rar|swf)$ {
 {% if $SRV_CACHE == on %}
@@ -138,7 +148,3 @@ server {
 	}
 {% endif %}
 }
-{% if $SSL == on %}
-{% import etc/templates/nginx-vhosts-ssl.template %}
-{% endif %}
-
