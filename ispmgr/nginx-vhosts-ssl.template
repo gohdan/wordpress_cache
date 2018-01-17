@@ -38,6 +38,7 @@ server {
 	include /etc/nginx/wordpress_cache/wordpress.conf;
 	include /etc/nginx/wordpress_cache/restrictions.conf;
 	include /etc/nginx/wordpress_cache/w3-total-cache.conf;
+	#include /etc/nginx/wordpress_cache/rocket-cache.conf;
 {% if $AUTOSUBDOMAIN != off and $AUTOSUBDOMAIN != "" %}
 {% if $AUTOSUBDOMAIN == autosubdomain_subdir %}
 	set $subdomain "";
@@ -73,6 +74,8 @@ server {
 	expires [% $EXPIRES_VALUE %];
 {% endif %}
 	location / {
+		# Wordpress without cache
+		# try_files $uri $uri/ /index.php?$args;
 		# W3 total cache
 		try_files /wp-content/cache/page_enhanced/${host}${cache_uri}_index.html $uri $uri/ /index.php?$args;
 		# WP Super Cache
