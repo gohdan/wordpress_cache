@@ -57,9 +57,9 @@ server {
 	root $root_path;
 {% endif %}
 {% if $FOREGROUND == on %}
-	listen {% $NGINX_SSL_LISTEN_ON %} default_server;
+	listen {% $NGINX_SSL_LISTEN_ON %} http2 default_server;
 {% else %}
-	listen {% $NGINX_SSL_LISTEN_ON %};
+	listen {% $NGINX_SSL_LISTEN_ON %} http2;
 {% endif %}
 {% if $USER_RESOURCES %}
 	include {% $USER_NGINX_RESOURCES_PATH %};
